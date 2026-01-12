@@ -1,23 +1,31 @@
 import React from 'react'
 import { ExtensionProvider } from '@looker/extension-sdk-react'
 import { hot } from 'react-hot-loader/root'
-import { ComponentsProvider, SpaceVertical, Box, Flex } from '@looker/components'
+import { ComponentsProvider } from '@looker/components'
 import { MemoryRouter } from 'react-router-dom'
-import { FolderNavigation } from './Sidebar/FolderNavigation'
 import AppProvider from './AppContext'
-import { EmbedView } from './EmbedView'
+import useExtensionSdk from './hooks/useExtensionSdk'
+import { RouteHandler } from './RouteHandler'
+
+const AppContent = () => {
+  const extensionSdk = useExtensionSdk()
+  // Get initial route from SDK, fallback to '/'
+  // The route might come in as /folders/123, which is what we want
+  const initialRoute = extensionSdk.lookerHostData?.route || '/'
+
+  return (
+    // @ts-ignore
+    <MemoryRouter initialEntries={[initialRoute]}>
+      <RouteHandler />
+    </MemoryRouter>
+  )
+}
 
 export const App = hot(() => (
   <ExtensionProvider>
     <AppProvider>
       <ComponentsProvider>
-        {/* @ts-ignore */}
-        <MemoryRouter>
-          <FolderNavigation />
-          <Box p="u3" borderBottom="1px solid key" display="grid" height="100%">
-            <EmbedView />
-          </Box>
-        </MemoryRouter>
+        <AppContent />
       </ComponentsProvider>
     </AppProvider>
   </ExtensionProvider>

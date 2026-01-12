@@ -53,15 +53,21 @@ export const EmbedView = () => {
     }
 
     if (embedBuilder) {
+      const paramsObj: any = {
+        embed_domain: hostUrl
+      }
       embedBuilder
         .appendTo(embedContainerRef.current)
         .withClassName('looker-embed')
+        .withParams(paramsObj)
         .on('dashboard:loaded', () => setLoading(false))
-        .on('look:loaded', () => setLoading(false))
-        // .on('dashboard:run:start', () => setLoading(true))
-        // .on('dashboard:run:complete', () => setLoading(false))
+        .on('dashboard:run:start', () => setLoading(false))
+        .on('look:run:start', () => setLoading(false))
+        .on('look:ready', () => setLoading(false))
+        .on('*', (event: any) => console.log('Embed event:', JSON.stringify(event)))
         .build()
         .connect()
+        // .then(() => setLoading(false))
         .catch((err) => {
           console.error('Embed error:', err)
           setError('Failed to load content. Please ensure you have permission to view this item.')

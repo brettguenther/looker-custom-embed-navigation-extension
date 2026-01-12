@@ -7,58 +7,66 @@ import {
   InputSearch,
   SpaceVertical,
   Spinner,
-  Text,
-  Popover,
   Button,
   Span,
-  Box
+  Box,
+  Popover
 } from '@looker/components'
 import { Folder, Dashboard, Visibility } from '@styled-icons/material'
 import useSdk from '../hooks/useSdk'
-import useExtensionSdk from '../hooks/useExtensionSdk'
 import useSWR from 'swr'
-import { useLocation } from 'react-router-dom'
 import { useDebounce } from '../hooks/useDebounce'
 import { IFolder, IDashboard, ILook } from '@looker/sdk'
 import { useAppContext } from '../AppContext'
 
-const FolderTree = ({ folder_id, default_open = false }: { folder_id: string, default_open?: boolean }) => {
+interface FolderTreeProps {
+  folder_id: string
+  folder_name?: string
+  default_open?: boolean
+  flatten?: boolean
+}
+
+const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = false }: FolderTreeProps) => {
   const sdk = useSdk()
   const { selectContent } = useAppContext()
 
-  const { data: folder } = useSWR(['folder', folder_id], () => sdk.ok(sdk.folder(folder_id)))
-  const { data: children } = useSWR(['folder_children', folder_id], () => sdk.ok(sdk.search_folders({ parent_id: folder_id })))
+  // If we don't have the name from parent, we might need to fetch folder metadata.
+  // Ideally parent passes name. If flatten=true, we might generally need to fetch to be safe or rely on what's passed.
+  // For 'personal' folder, we often need to fetch to get the real ID if we passed "personal", or just rely on 'personal'.
+  // But search_folders needs ID. 'personal' string usually works for sdk.folder('personal').
+  // Let's rely on SWR caching.
 
+  const { data: folder } = useSWR(
+    !folder_name ? ['folder', folder_id] : null,
+    () => sdk.ok(sdk.folder(folder_id))
+  )
+
+  const name = folder_name || folder?.name
+
+  // Fetch content to determine counts and children
+  const { data: children } = useSWR(['folder_children', folder_id], () => sdk.ok(sdk.search_folders({ parent_id: folder_id })))
   const { data: dashboards } = useSWR(['folder_dashboards', folder_id], () => sdk.ok(sdk.search_dashboards({ folder_id })))
   const { data: looks } = useSWR(['folder_looks', folder_id], () => sdk.ok(sdk.search_looks({ folder_id })))
 
-  if (!folder) return <Spinner size={20} />
-
-  const hasChildren = (children && children.length > 0) || (dashboards && dashboards.length > 0) || (looks && looks.length > 0)
-
-  const label = <Span>{folder.name}</Span>
-
-  if (!hasChildren) {
+  // Loading state: If we need name and don't have it, or if we are loading content
+  // Actually, for Tree item, we want to show the Name immediately if possible.
+  // If we don't have name (root or loose node), wait for folder.
+  if (!name && !folder) {
     return (
-      <TreeItem
-        icon={<Folder />}
-        detail={folder.id}
-      >
-        {label}
-      </TreeItem>
+      <Box p="u2" display="flex" justifyContent="center">
+        <Spinner size={20} />
+      </Box>
     )
   }
 
-  return (
-    <Tree
-      label={label}
-      defaultOpen={default_open}
-      icon={<Folder />}
-      detail={folder.id}
-    >
+  const contentCount = (dashboards?.length || 0) + (looks?.length || 0)
+  const hasChildren = (children && children.length > 0) || contentCount > 0
+
+  const items = (
+    <>
       {/* Subfolders */}
       {children?.map((child) => (
-        <FolderTree key={child.id} folder_id={child.id!} />
+        <FolderTree key={child.id} folder_id={child.id!} folder_name={child.name!} />
       ))}
 
       {/* Dashboards */}
@@ -82,21 +90,55 @@ const FolderTree = ({ folder_id, default_open = false }: { folder_id: string, de
           {look.title}
         </TreeItem>
       ))}
+    </>
+  )
+
+  if (flatten) {
+    // If flattened, we just return the items without the wrapper Tree/TreeItem
+    if (!children && !dashboards && !looks) {
+      return (
+        <Box p="u4" display="flex" justifyContent="center">
+          <Spinner size={30} />
+        </Box>
+      )
+    }
+    return items
+  }
+
+  if (!hasChildren) {
+    return (
+      <TreeItem
+        icon={<Folder />}
+        detail={contentCount > 0 ? String(contentCount) : undefined}
+      >
+        <Span>{name}</Span>
+      </TreeItem>
+    )
+  }
+
+  return (
+    <Tree
+      label={<Span>{name}</Span>}
+      defaultOpen={default_open}
+      icon={<Folder />}
+      detail={String(contentCount)}
+    >
+      {items}
     </Tree>
   )
 }
 
-export const FolderNavigation = () => {
+interface FolderNavigationProps {
+  sharedFolderId?: string
+}
+
+export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps) => {
   const sdk = useSdk()
-  const location = useLocation()
-  const queryParams = new URLSearchParams(location.search)
-  const sharedRootId = queryParams.get("shared_folder") || "1"
   const [isOpen, setIsOpen] = useState(false)
 
   // Search State
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce<string>(search, 500)
-  const { selectContent } = useAppContext()
 
   const { data: debounced_search_folders, isLoading: isSearchLoading } = useSWR(
     debouncedSearch ? ['search_folders', debouncedSearch] : null,
@@ -107,18 +149,27 @@ export const FolderNavigation = () => {
 
   const content = (
     <Tabs2>
-      <Tab2 value="my_personal_folder" label="My Personal Folder">
-        {my_personal_folder?.id && (
-          <FolderTree
-            folder_id={my_personal_folder.id}
-            default_open={true}
-          />
+      <Tab2 id="my_personal_folder" label="My Personal Folder">
+        {/* Flattened Personal Folder View */}
+        {my_personal_folder?.id ? (
+          <SpaceVertical gap="none">
+            <FolderTree
+              folder_id={my_personal_folder.id}
+              folder_name={my_personal_folder.name} 
+              default_open={true}
+              flatten={true} 
+            />
+          </SpaceVertical>
+        ) : (
+          <Box p="u4" display="flex" justifyContent="center">
+            <Spinner size={30} />
+          </Box>
         )}
       </Tab2>
-      <Tab2 value="shared_folder" label="Shared Folder">
-        <FolderTree folder_id={sharedRootId} default_open={true} />
+      <Tab2 id="shared_folder" label="Shared Folder">
+        <FolderTree folder_id={sharedFolderId} default_open={true} />
       </Tab2>
-      <Tab2 value="search" label="Search">
+      <Tab2 id="search" label="Search">
         <SpaceVertical gap="u3" width="100%">
           <InputSearch
             autoFocus
@@ -144,6 +195,7 @@ export const FolderNavigation = () => {
                 <FolderTree
                   key={folder.id}
                   folder_id={folder.id!}
+                  folder_name={folder.name!}
                   default_open={false}
                 />
               ))}

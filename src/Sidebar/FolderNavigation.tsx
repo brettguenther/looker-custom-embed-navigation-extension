@@ -10,23 +10,26 @@ import {
   Button,
   Span,
   Box,
-  Popover
+  Popover,
+  IconButton
 } from '@looker/components'
-import { Folder, Dashboard, Visibility } from '@styled-icons/material'
+import { Folder, Dashboard, Visibility, DriveFileMove } from '@styled-icons/material'
 import useSdk from '../hooks/useSdk'
 import useSWR from 'swr'
 import { useDebounce } from '../hooks/useDebounce'
 import { IFolder, IDashboard, ILook, IContentSearch } from '@looker/sdk'
 import { useAppContext } from '../AppContext'
+import { MoveContentDialog } from './MoveContentDialog'
 
 interface FolderTreeProps {
   folder_id: string
   folder_name?: string
   default_open?: boolean
   flatten?: boolean
+  onMove: (content: { id: string, type: 'dashboard' | 'look', title: string }) => void
 }
 
-const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = false }: FolderTreeProps) => {
+const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = false, onMove }: FolderTreeProps) => {
   const sdk = useSdk()
   const { selectContent } = useAppContext()
 
@@ -57,7 +60,7 @@ const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = fa
   const items = (
     <>
       {childFolders?.map((childFolder: IFolder) => (
-        <FolderTree key={childFolder.id} folder_id={childFolder.id!} folder_name={childFolder.name!} />
+        <FolderTree key={childFolder.id} folder_id={childFolder.id!} folder_name={childFolder.name!} onMove={onMove} />
       ))}
       {dashboards && dashboards.length > 0 && (
         <NavTree defaultOpen={false} label="Dashboards">
@@ -66,6 +69,16 @@ const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = fa
               key={`dashboard-${dashboard.id}`}
               icon={<Dashboard />}
               onClick={() => selectContent('dashboard', dashboard.id!)}
+              detail={
+                <IconButton
+                  icon={<DriveFileMove />}
+                  label="Move"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    onMove({ id: dashboard.id!, type: 'dashboard', title: dashboard.title! })
+                  }}
+                />
+              }
             >
               {dashboard.title}
             </NavTreeItem>
@@ -79,6 +92,16 @@ const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = fa
               key={`look-${look.id}`}
               icon={<Visibility />}
               onClick={() => selectContent('look', String(look.id!))}
+              detail={
+                <IconButton
+                  icon={<DriveFileMove />}
+                  label="Move"
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation()
+                    onMove({ id: String(look.id!), type: 'look', title: look.title! })
+                  }}
+                />
+              }
             >
               {look.title}
             </NavTreeItem>
@@ -130,6 +153,11 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
   const sdk = useSdk()
   const { selectContent } = useAppContext()
   const [isOpen, setIsOpen] = useState(false)
+  const [moveContent, setMoveContent] = useState<{ id: string, type: 'dashboard' | 'look', title: string } | null>(null)
+
+  const handleMove = (content: { id: string, type: 'dashboard' | 'look', title: string }) => {
+    setMoveContent(content)
+  }
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce<string>(search, 500)
@@ -157,6 +185,7 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
               folder_name={my_personal_folder.name}
               default_open={true}
               flatten={true}
+              onMove={handleMove}
             />
           </SpaceVertical>
         ) : (
@@ -167,7 +196,7 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
       </Tab2>
     ) : null,
     <Tab2 id="shared_folder" label="Shared Folder" key="shared_folder">
-      <FolderTree folder_id={sharedFolderId} default_open={true} />
+      <FolderTree folder_id={sharedFolderId} default_open={true} onMove={handleMove} />
     </Tab2>,
     <Tab2 id="search" label="Search" key="search">
       <SpaceVertical gap="u3" width="100%">
@@ -198,6 +227,16 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
                     key={`dashboard-${result.content_id}`}
                     icon={<Dashboard />}
                     onClick={() => selectContent('dashboard', result.content_id!)}
+                    detail={
+                      <IconButton
+                        icon={<DriveFileMove />}
+                        label="Move"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMove({ id: result.content_id!, type: 'dashboard', title: result.title! })
+                        }}
+                      />
+                    }
                   >
                     {result.title}
                   </NavTreeItem>
@@ -209,6 +248,16 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
                     key={`look-${result.content_id}`}
                     icon={<Visibility />}
                     onClick={() => selectContent('look', result.content_id!)}
+                    detail={
+                      <IconButton
+                        icon={<DriveFileMove />}
+                        label="Move"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleMove({ id: result.content_id!, type: 'look', title: result.title! })
+                        }}
+                      />
+                    }
                   >
                     {result.title}
                   </NavTreeItem>
@@ -229,8 +278,19 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
   )
 
   return (
-    <Popover content={content} isOpen={isOpen} setOpen={setIsOpen}>
-      <Button iconBefore={<Folder />}>Navigate</Button>
-    </Popover>
+    <>
+      <Popover content={content} isOpen={isOpen} setOpen={setIsOpen}>
+        <Button iconBefore={<Folder />}>Navigate</Button>
+      </Popover>
+      {moveContent && (
+        <MoveContentDialog
+          isOpen={!!moveContent}
+          onClose={() => setMoveContent(null)}
+          contentId={moveContent.id}
+          contentType={moveContent.type}
+          contentTitle={moveContent.title}
+        />
+      )}
+    </>
   )
 }

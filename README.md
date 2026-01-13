@@ -1,6 +1,8 @@
 # Looker Extension looker-custom-embed-navigation
 
-looker-custom-embed-navigation is a Looker extension using React and TypeScript.
+looker-custom-embed-navigation is a Looker extension developed using React and TypeScript. Its primary purpose is to provide a customizable navigation interface for embedded Looker content, allowing for seamless integration and enhanced user experience within host applications. 
+
+The extension provides a tree-based view of folders and content, with the ability to move content between folders and perform a global search for content across folders. Additionally, the extension provides the ability to adjust the default shared folder as a navigation root and content to embed. This is defined via the extension url path parameters. For example, `https://{yourLookerHost}/extensions/your-model::looker-custom-embed-navigation/folders/247/dashboards/2` would default to use shared folder id 247 as the root for shared space navigation and start by embedding the dashboard with id 2.
 
 ## Getting Started for Development
 
@@ -88,7 +90,7 @@ To allow other people to use the extension, build the JavaScript bundle file and
       label: "Looker Custom Embed Navigation"
       file: "./bundle.js"
       entitlements: {
-      core_api_methods: ["folder", "folder_children", "folder_dashboards", "folder_looks", "search_content"]
+      core_api_methods: ["folder", "folder_children", "folder_dashboards", "folder_looks", "search_content", "move_dashboard", "move_look", "search_folders"]
       use_embeds: yes
       navigation: yes
       use_iframes: yes

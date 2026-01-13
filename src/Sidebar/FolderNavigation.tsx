@@ -16,7 +16,7 @@ import { Folder, Dashboard, Visibility } from '@styled-icons/material'
 import useSdk from '../hooks/useSdk'
 import useSWR from 'swr'
 import { useDebounce } from '../hooks/useDebounce'
-import { IFolder, IDashboard, ILook } from '@looker/sdk'
+import { IFolder, IDashboard, ILook, IContentSearch } from '@looker/sdk'
 import { useAppContext } from '../AppContext'
 
 interface FolderTreeProps {
@@ -31,7 +31,7 @@ const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = fa
   const { selectContent } = useAppContext()
 
   const { data: folder } = useSWR(
-    !folder_name ? ['folder', folder_id] : null, 
+    !folder_name ? ['folder', folder_id] : null,
     () => sdk.ok(sdk.folder(folder_id))
   )
 
@@ -63,26 +63,26 @@ const FolderTree = ({ folder_id, folder_name, default_open = false, flatten = fa
         <NavTree defaultOpen={false} label="Dashboards">
           {dashboards.map((dashboard: IDashboard) => (
             <NavTreeItem
-          key={`dashboard-${dashboard.id}`}
-          icon={<Dashboard />}
-          onClick={() => selectContent('dashboard', dashboard.id!)}
-        >
-          {dashboard.title}
+              key={`dashboard-${dashboard.id}`}
+              icon={<Dashboard />}
+              onClick={() => selectContent('dashboard', dashboard.id!)}
+            >
+              {dashboard.title}
             </NavTreeItem>
-      ))}
+          ))}
         </NavTree>
       )}
       {looks && looks.length > 0 && (
         <NavTree defaultOpen={false} label="Looks">
           {looks.map((look: ILook) => (
             <NavTreeItem
-          key={`look-${look.id}`}
-          icon={<Visibility />}
-          onClick={() => selectContent('look', String(look.id!))}
-        >
-          {look.title}
+              key={`look-${look.id}`}
+              icon={<Visibility />}
+              onClick={() => selectContent('look', String(look.id!))}
+            >
+              {look.title}
             </NavTreeItem>
-      ))}
+          ))}
         </NavTree>
       )}
     </>
@@ -128,14 +128,15 @@ interface FolderNavigationProps {
 
 export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps) => {
   const sdk = useSdk()
+  const { selectContent } = useAppContext()
   const [isOpen, setIsOpen] = useState(false)
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce<string>(search, 500)
 
-  const { data: debounced_search_folders, isLoading: isSearchLoading } = useSWR(
-    debouncedSearch ? ['search_folders', debouncedSearch] : null,
-    () => sdk.ok(sdk.search_folders({ name: debouncedSearch }))
+  const { data: debounced_search_results, isLoading: isSearchLoading } = useSWR(
+    debouncedSearch ? ['search_content', debouncedSearch] : null,
+    () => sdk.ok(sdk.search_content({ terms: debouncedSearch, fields: "content_id,type,title,folder_id,folder_name" }))
   )
 
   const { data: my_personal_folder } = useSWR('personal_folder', () => sdk.ok(sdk.folder('personal')))
@@ -166,7 +167,7 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
           <InputSearch
             autoFocus
             value={search}
-            placeholder="Search for a folder"
+            placeholder="Search for content"
             onChange={(value: string) => {
               setSearch(value)
             }}
@@ -176,21 +177,38 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
               <Spinner size={30} />
             </Box>
           )}
-          {!debounced_search_folders?.length &&
+          {!debounced_search_results?.length &&
             !isSearchLoading &&
             debouncedSearch.length ? (
-            <Span>No folders found</Span>
+              <Span>No content found</Span>
           ) : null}
-          {!!debounced_search_folders?.length && (
+          {!!debounced_search_results?.length && (
             <SpaceVertical gap="none" width="100%">
-              {debounced_search_folders.map((folder: IFolder) => (
-                <FolderTree
-                  key={folder.id}
-                  folder_id={folder.id!}
-                  folder_name={folder.name!}
-                  default_open={false}
-                />
-              ))}
+              {debounced_search_results.map((result: IContentSearch) => {
+                if (result.type === 'dashboard') {
+                  return (
+                    <NavTreeItem
+                      key={`dashboard-${result.content_id}`}
+                      icon={<Dashboard />}
+                      onClick={() => selectContent('dashboard', result.content_id!)}
+                    >
+                      {result.title}
+                    </NavTreeItem>
+                  )
+                }
+                if (result.type === 'look') {
+                  return (
+                    <NavTreeItem
+                      key={`look-${result.content_id}`}
+                      icon={<Visibility />}
+                      onClick={() => selectContent('look', result.content_id!)}
+                    >
+                      {result.title}
+                    </NavTreeItem>
+                  )
+                }
+                return null
+              })}
             </SpaceVertical>
           )}
         </SpaceVertical>

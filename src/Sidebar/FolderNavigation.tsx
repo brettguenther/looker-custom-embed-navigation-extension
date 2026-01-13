@@ -139,11 +139,17 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
     () => sdk.ok(sdk.search_content({ terms: debouncedSearch, fields: "content_id,type,title,folder_id,folder_name" }))
   )
 
-  const { data: my_personal_folder } = useSWR('personal_folder', () => sdk.ok(sdk.folder('personal')))
+  const { data: my_personal_folder } = useSWR('personal_folder', () => sdk.ok(sdk.folder('personal', 'name,id,child_count,dashboards(id),looks(id)')))
 
-  const content = (
-    <Tabs2>
-      <Tab2 id="my_personal_folder" label="My Personal Folder">
+  const hasPersonalContent = my_personal_folder && (
+    (my_personal_folder.child_count || 0) > 0 ||
+    (my_personal_folder.dashboards?.length || 0) > 0 ||
+    (my_personal_folder.looks?.length || 0) > 0
+  )
+
+  const tabs = [
+    hasPersonalContent ? (
+      <Tab2 id="my_personal_folder" label="My Personal Folder" key="my_personal_folder">
         {my_personal_folder?.id ? (
           <SpaceVertical gap="none">
             <FolderTree
@@ -159,60 +165,66 @@ export const FolderNavigation = ({ sharedFolderId = "1" }: FolderNavigationProps
           </Box>
         )}
       </Tab2>
-      <Tab2 id="shared_folder" label="Shared Folder">
-        <FolderTree folder_id={sharedFolderId} default_open={true} />
-      </Tab2>
-      <Tab2 id="search" label="Search">
-        <SpaceVertical gap="u3" width="100%">
-          <InputSearch
-            autoFocus
-            value={search}
-            placeholder="Search for content"
-            onChange={(value: string) => {
-              setSearch(value)
-            }}
-          />
-          {isSearchLoading && (
-            <Box display="flex" justifyContent="center">
-              <Spinner size={30} />
-            </Box>
-          )}
-          {!debounced_search_results?.length &&
-            !isSearchLoading &&
-            debouncedSearch.length ? (
-              <Span>No content found</Span>
-          ) : null}
-          {!!debounced_search_results?.length && (
-            <SpaceVertical gap="none" width="100%">
-              {debounced_search_results.map((result: IContentSearch) => {
-                if (result.type === 'dashboard') {
-                  return (
-                    <NavTreeItem
-                      key={`dashboard-${result.content_id}`}
-                      icon={<Dashboard />}
-                      onClick={() => selectContent('dashboard', result.content_id!)}
-                    >
-                      {result.title}
-                    </NavTreeItem>
-                  )
-                }
-                if (result.type === 'look') {
-                  return (
-                    <NavTreeItem
-                      key={`look-${result.content_id}`}
-                      icon={<Visibility />}
-                      onClick={() => selectContent('look', result.content_id!)}
-                    >
-                      {result.title}
-                    </NavTreeItem>
-                  )
-                }
-                return null
-              })}
-            </SpaceVertical>
-          )}
-        </SpaceVertical>
-      </Tab2>
+    ) : null,
+    <Tab2 id="shared_folder" label="Shared Folder" key="shared_folder">
+      <FolderTree folder_id={sharedFolderId} default_open={true} />
+    </Tab2>,
+    <Tab2 id="search" label="Search" key="search">
+      <SpaceVertical gap="u3" width="100%">
+        <InputSearch
+          autoFocus
+          value={search}
+          placeholder="Search for content"
+          onChange={(value: string) => {
+            setSearch(value)
+          }}
+        />
+        {isSearchLoading && (
+          <Box display="flex" justifyContent="center">
+            <Spinner size={30} />
+          </Box>
+        )}
+        {!debounced_search_results?.length &&
+          !isSearchLoading &&
+          debouncedSearch.length ? (
+          <Span>No content found</Span>
+        ) : null}
+        {!!debounced_search_results?.length && (
+          <SpaceVertical gap="none" width="100%">
+            {debounced_search_results.map((result: IContentSearch) => {
+              if (result.type === 'dashboard') {
+                return (
+                  <NavTreeItem
+                    key={`dashboard-${result.content_id}`}
+                    icon={<Dashboard />}
+                    onClick={() => selectContent('dashboard', result.content_id!)}
+                  >
+                    {result.title}
+                  </NavTreeItem>
+                )
+              }
+              if (result.type === 'look') {
+                return (
+                  <NavTreeItem
+                    key={`look-${result.content_id}`}
+                    icon={<Visibility />}
+                    onClick={() => selectContent('look', result.content_id!)}
+                  >
+                    {result.title}
+                  </NavTreeItem>
+                )
+              }
+              return null
+            })}
+          </SpaceVertical>
+        )}
+      </SpaceVertical>
+    </Tab2>
+  ].filter((t): t is React.ReactElement => !!t)
+
+  const content = (
+    <Tabs2>
+      {tabs}
     </Tabs2>
   )
 
